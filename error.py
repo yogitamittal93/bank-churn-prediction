@@ -5,6 +5,7 @@ files = [
     "model1.pkl",
     "model2.pkl",
     "model3.pkl",
+    "model4.pkl",
     "corr_matrix.joblib"
 ]
 

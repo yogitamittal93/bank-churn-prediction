@@ -10,18 +10,32 @@ from pathlib import Path
 # ==========================================
 
 st.set_page_config(
-    page_title="Bank Churn Prediction",
+    page_title="Bank Churn Prediction Dashboard",
     page_icon="🏦",
     layout="wide"
 )
 
 BASE_DIR = Path(__file__).resolve().parent
 
-# Only load the two working models
 MODEL_FILES = {
-    "Random Forest": "model1.pkl",
-    "Gradient Boosting": "model3.pkl"
+    "Naive Bayes": "model1.pkl",
+    #"XGBoost": "model2.pkl",
+    "Gradient Boosting": "model3.pkl",
+    "SVM": "model4.pkl"
 }
+
+FEATURES = [
+    "CreditScore",
+    "Geography",
+    "Gender",
+    "Age",
+    "Tenure",
+    "Balance",
+    "NumOfProducts",
+    "HasCrCard",
+    "IsActiveMember",
+    "EstimatedSalary"
+]
 
 
 # ==========================================
@@ -35,12 +49,14 @@ def load_models():
 
     for name, filename in MODEL_FILES.items():
 
-        file_path = BASE_DIR / filename
+        path = BASE_DIR / filename
 
-        if not file_path.exists():
-            raise FileNotFoundError(f"Missing file: {filename}")
+        if not path.exists():
+            raise FileNotFoundError(
+                f"Model file not found: {filename}"
+            )
 
-        models[name] = joblib.load(file_path)
+        models[name] = joblib.load(path)
 
     return models
 
@@ -61,66 +77,76 @@ try:
     corr_matrix = load_correlation()
 
 except Exception as e:
-    st.error(f"Asset loading error: {e}")
+    st.error(f"Error loading model assets: {e}")
     st.stop()
 
 
 # ==========================================
-# 3. SIDEBAR
+# 3. SIDEBAR CONFIGURATION
 # ==========================================
 
 st.sidebar.title("⚙️ Model Configuration")
 
 primary_model = st.sidebar.selectbox(
     "Select Primary Model",
-    list(models.keys())
+    list(models.keys()),
+    index=1
 )
 
 compare_models = st.sidebar.checkbox(
-    "Compare Both Models",
+    "Compare All Four Models",
     value=True
 )
 
 st.sidebar.divider()
-st.sidebar.markdown("### Available Models")
+
+st.sidebar.subheader("Loaded Models")
 
 for name in models:
     st.sidebar.success(name)
 
 
 # ==========================================
-# 4. HEADER
+# 4. MAIN HEADER
 # ==========================================
 
 st.title("🏦 Bank Customer Churn Prediction")
 
 st.markdown(
-    "Enter customer details to predict the probability "
-    "of customer churn using Machine Learning."
+    """
+    An interactive Machine Learning dashboard that predicts
+    customer churn using four classification algorithms.
+    
+    Enter customer details to generate predictions and compare
+    model performance on an individual customer.
+    """
 )
 
 tab1, tab2 = st.tabs([
-    "🔮 Churn Prediction",
-    "📊 Correlation Analysis"
+    "🔮 Customer Prediction",
+    "📊 Feature Correlation"
 ])
 
 
 # ==========================================
-# 5. CUSTOMER INPUT
+# 5. CUSTOMER INPUT FORM
 # ==========================================
 
 with tab1:
 
-    st.subheader("Customer Information")
+    st.subheader("Enter Customer Information")
 
-    with st.form("prediction_form"):
+    with st.form("customer_prediction_form"):
 
         col1, col2, col3 = st.columns(3)
 
         with col1:
 
             credit_score = st.number_input(
-                "Credit Score", 300, 850, 650
+                "Credit Score",
+                min_value=100,
+                max_value=850,
+                value=650
             )
 
             geography = st.selectbox(
@@ -134,59 +160,63 @@ with tab1:
             )
 
             age = st.number_input(
-                "Age", 18, 100, 42
+                "Age",
+                min_value=18,
+                max_value=100,
+                value=42
             )
 
         with col2:
 
             tenure = st.slider(
-                "Tenure (Years)", 0, 10, 5
+                "Tenure (Years)",
+                0, 10, 5
             )
 
             balance = st.number_input(
                 "Account Balance ($)",
                 min_value=0.0,
-                max_value=300000.0,
+                max_value=3000000.0,
                 value=85000.0,
                 step=500.0
             )
 
-            products = st.selectbox(
+            num_products = st.selectbox(
                 "Number of Products",
                 [1, 2, 3, 4]
             )
 
         with col3:
 
-            credit_card = st.selectbox(
+            has_cr_card = st.selectbox(
                 "Has Credit Card?",
                 [1, 0],
-                format_func=lambda x: "Yes" if x else "No"
+                format_func=lambda x: "Yes" if x == 1 else "No"
             )
 
             active_member = st.selectbox(
                 "Active Member?",
                 [1, 0],
-                format_func=lambda x: "Yes" if x else "No"
+                format_func=lambda x: "Yes" if x == 1 else "No"
             )
 
             salary = st.number_input(
                 "Estimated Salary ($)",
                 min_value=0.0,
-                max_value=250000.0,
+                max_value=25000000.0,
                 value=100000.0,
                 step=1000.0
             )
 
         submitted = st.form_submit_button(
-            "Predict Churn",
+            "Predict Customer Churn",
             type="primary",
             use_container_width=True
         )
 
 
     # ==========================================
-    # 6. PREDICTION
+    # 6. RUN PREDICTIONS
     # ==========================================
 
     if submitted:
@@ -198,13 +228,21 @@ with tab1:
             "Age": age,
             "Tenure": tenure,
             "Balance": balance,
-            "NumOfProducts": products,
-            "HasCrCard": credit_card,
+            "NumOfProducts": num_products,
+            "HasCrCard": has_cr_card,
             "IsActiveMember": active_member,
             "EstimatedSalary": salary
-        }])
+        }], columns=FEATURES)
 
         st.divider()
+
+        st.subheader("Customer Profile")
+
+        st.dataframe(
+            input_df,
+            use_container_width=True,
+            hide_index=True
+        )
 
         results = {}
         errors = {}
@@ -213,8 +251,9 @@ with tab1:
 
             try:
 
-                prediction = int(model.predict(input_df)[0])
+                prediction = model.predict(input_df)[0]
 
+                # Find churn probability for class 1
                 probability = None
 
                 if hasattr(model, "predict_proba"):
@@ -224,12 +263,13 @@ with tab1:
                     classes = list(model.classes_)
 
                     if 1 in classes:
+
                         probability = float(
                             probabilities[classes.index(1)]
                         )
 
                 results[name] = {
-                    "prediction": prediction,
+                    "prediction": int(prediction),
                     "probability": probability
                 }
 
@@ -242,7 +282,7 @@ with tab1:
         # 7. PRIMARY MODEL RESULT
         # ==========================================
 
-        st.subheader(f"Primary Result: {primary_model}")
+        st.subheader(f"Primary Model: {primary_model}")
 
         if primary_model in results:
 
@@ -251,92 +291,148 @@ with tab1:
             prediction = result["prediction"]
             probability = result["probability"]
 
-            c1, c2 = st.columns(2)
+            col1, col2 = st.columns(2)
 
-            with c1:
+            with col1:
 
                 if probability is not None:
+
                     st.metric(
                         "Churn Probability",
                         f"{probability * 100:.2f}%"
                     )
-                else:
-                    st.metric("Prediction", prediction)
 
-            with c2:
+                else:
+
+                    st.metric(
+                        "Prediction",
+                        "Churn" if prediction == 1 else "Stay"
+                    )
+
+            with col2:
 
                 if prediction == 1:
-                    st.error("⚠️ Customer is likely to CHURN")
+
+                    st.error(
+                        "⚠️ Customer is predicted to CHURN"
+                    )
+
                 else:
-                    st.success("✅ Customer is likely to STAY")
+
+                    st.success(
+                        "✅ Customer is predicted to STAY"
+                    )
 
             if probability is not None:
                 st.progress(probability)
 
+        else:
+
+            st.error(
+                f"Primary model failed: {errors.get(primary_model)}"
+            )
+
 
         # ==========================================
-        # 8. MODEL COMPARISON
+        # 8. FOUR-MODEL COMPARISON
         # ==========================================
 
         if compare_models:
 
             st.divider()
-            st.subheader("Model Comparison")
 
-            comparison = []
+            st.subheader("⚖️ Four-Model Comparison")
+
+            comparison_data = []
 
             for name, result in results.items():
 
-                comparison.append({
+                prediction = result["prediction"]
+                probability = result["probability"]
+
+                comparison_data.append({
+
                     "Model": name,
+
                     "Prediction": (
-                        "Churn" if result["prediction"] == 1 else "Stay"
+                        "Churn" if prediction == 1 else "Stay"
                     ),
+
                     "Churn Probability": (
-                        f'{result["probability"] * 100:.2f}%'
-                        if result["probability"] is not None
-                        else "Unavailable"
+                        f"{probability * 100:.2f}%"
+                        if probability is not None
+                        else "Not Available"
                     )
                 })
 
-            if comparison:
+            if comparison_data:
 
                 st.dataframe(
-                    pd.DataFrame(comparison),
+                    pd.DataFrame(comparison_data),
                     use_container_width=True,
                     hide_index=True
                 )
 
+                # Majority voting
                 churn_votes = sum(
-                    r["prediction"] == 1
-                    for r in results.values()
+                    result["prediction"] == 1
+                    for result in results.values()
                 )
 
-                st.metric(
-                    "Models Predicting Churn",
-                    f"{churn_votes}/{len(results)}"
-                )
+                total_votes = len(results)
 
-                if churn_votes > len(results) / 2:
-                    st.warning("Majority prediction: Customer Churn")
+                st.subheader("Model Consensus")
+
+                c1, c2 = st.columns(2)
+
+                with c1:
+
+                    st.metric(
+                        "Churn Predictions",
+                        f"{churn_votes}/{total_votes}"
+                    )
+
+                with c2:
+
+                    st.metric(
+                        "Retention Predictions",
+                        f"{total_votes - churn_votes}/{total_votes}"
+                    )
+
+                if churn_votes > total_votes / 2:
+
+                    st.warning(
+                        "Majority of models predict customer churn."
+                    )
+
+                elif churn_votes < total_votes / 2:
+
+                    st.success(
+                        "Majority of models predict customer retention."
+                    )
+
                 else:
-                    st.success("Majority prediction: Customer Retention")
+
+                    st.info(
+                        "The models are equally divided. No majority consensus."
+                    )
 
 
         # ==========================================
-        # 9. ERRORS
+        # 9. MODEL ERRORS
         # ==========================================
 
         if errors:
 
-            with st.expander("Model Errors"):
+            with st.expander("View Model Errors"):
 
                 for name, error in errors.items():
+
                     st.error(f"{name}: {error}")
 
 
 # ==========================================
-# 10. CORRELATION MATRIX
+# 10. FEATURE CORRELATION
 # ==========================================
 
 with tab2:
@@ -345,45 +441,76 @@ with tab2:
 
     if corr_matrix is not None:
 
-        fig, ax = plt.subplots(figsize=(10, 7))
+        if isinstance(corr_matrix, pd.DataFrame):
+            corr_df = corr_matrix
+        else:
+            corr_df = pd.DataFrame(corr_matrix)
 
-        sns.heatmap(
-            corr_matrix,
-            annot=True,
-            fmt=".2f",
-            cmap="coolwarm",
-            center=0,
-            linewidths=0.5,
-            ax=ax
-        )
+        col1, col2 = st.columns([2, 1])
 
-        plt.xticks(rotation=45, ha="right")
-        plt.yticks(rotation=0)
+        with col1:
 
-        st.pyplot(fig)
-        plt.close(fig)
+            fig, ax = plt.subplots(figsize=(10, 7))
 
-        if "Exited" in corr_matrix.columns:
+            sns.heatmap(
+                corr_df,
+                annot=True,
+                fmt=".2f",
+                cmap="coolwarm",
+                center=0,
+                linewidths=0.5,
+                ax=ax
+            )
 
-            st.subheader("Top Features Associated with Churn")
+            plt.xticks(rotation=45, ha="right")
+            plt.yticks(rotation=0)
 
-            target_corr = (
-                corr_matrix["Exited"]
-                .drop("Exited")
-                .sort_values(
-                    key=lambda x: x.abs(),
-                    ascending=False
+            st.pyplot(fig)
+
+            plt.close(fig)
+
+        with col2:
+
+            st.subheader("Top Churn Correlations")
+
+            if "Exited" in corr_df.columns:
+
+                target_corr = (
+                    corr_df["Exited"]
+                    .drop("Exited")
+                    .sort_values(
+                        key=lambda x: x.abs(),
+                        ascending=False
+                    )
                 )
-            )
 
-            st.dataframe(
-                target_corr.rename("Correlation").to_frame(),
-                use_container_width=True
-            )
+                st.dataframe(
+                    target_corr.rename(
+                        "Correlation"
+                    ).to_frame(),
+                    use_container_width=True
+                )
+
+            else:
+
+                st.info(
+                    "Exited column not found in correlation matrix."
+                )
 
     else:
 
-        st.info("Correlation matrix not found.")
+        st.info(
+            "Place corr_matrix.joblib in the project directory "
+            "to display the heatmap."
+        )
+
+
+# ==========================================
+# 11. FOOTER
+# ==========================================
 
 st.sidebar.divider()
-st.sidebar.caption("Bank Churn Prediction | ML Dashboard")
+
+st.sidebar.caption(
+    "Bank Churn Prediction | Four ML Models"
+)
