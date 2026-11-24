@@ -72,6 +72,29 @@ def test_prediction_output(model):
 
     assert prediction[0] in [0, 1]
 
+def test_prediction_outputnotnone(model):
+    """Check whether predictions contain valid class labels."""
+    sample_input = pd.DataFrame(
+        [[619, "France", "Female", 42, 2, 0.00, 1, 1, 1, 101348.88]],
+        
+        columns=[
+            "CreditScore",
+            "Geography",
+            "Gender",
+            "Age",
+            "Tenure",
+            "Balance",
+            "NumOfProducts",
+            "HasCrCard",
+            "IsActiveMember",
+            "EstimatedSalary"
+        ]
+    )
+
+    prediction = model.predict(sample_input)
+
+    assert len(prediction) != 0
+
 
 def test_prediction_probability(model):
     """Check whether predicted probabilities are valid."""
