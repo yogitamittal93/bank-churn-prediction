@@ -2,3 +2,5 @@
     remote = myremote
 ['remote "myremote"']
     url = D:\Bank-Churn
+['remote "gcsremote"']
+    url = gs://bank-churn-dvc-storage
